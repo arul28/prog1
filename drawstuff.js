@@ -460,12 +460,119 @@ function drawInputBoxesUsingPaths(context) {
 
 /* main -- here is where execution begins after window load */
 
+function raycast(x, y, triangles) {
+    let ray = {
+        origin: [0.5, 0.5, -0.5],
+        direction: [
+            (x / canvas.width) - 0.5,
+            -((y / canvas.height) - 0.5),
+            0.5
+        ]
+    };
+    
+    let closestT = Infinity;
+    let hitTriangle = null;
+    
+    for (let file of triangles) {
+        for (let t = 0; t < file.triangles.length; t++) {
+            let triangle = {
+                v0: file.vertices[file.triangles[t][0]],
+                v1: file.vertices[file.triangles[t][1]],
+                v2: file.vertices[file.triangles[t][2]]
+            };
+            
+            let intersectionResult = rayTriangleIntersection(ray, triangle);
+            if (intersectionResult && intersectionResult.t < closestT) {
+                closestT = intersectionResult.t;
+                hitTriangle = {triangle: triangle, material: file.material};
+            }
+        }
+    }
+    
+    return hitTriangle;
+}
+
+function rayTriangleIntersection(ray, triangle) {
+    const EPSILON = 0.0000001;
+    let edge1 = vecSubtract(triangle.v1, triangle.v0);
+    let edge2 = vecSubtract(triangle.v2, triangle.v0);
+    let h = vecCross(ray.direction, edge2);
+    let a = vecDot(edge1, h);
+    
+    if (a > -EPSILON && a < EPSILON) return null;
+    
+    let f = 1.0 / a;
+    let s = vecSubtract(ray.origin, triangle.v0);
+    let u = f * vecDot(s, h);
+    
+    if (u < 0.0 || u > 1.0) return null;
+    
+    let q = vecCross(s, edge1);
+    let v = f * vecDot(ray.direction, q);
+    
+    if (v < 0.0 || u + v > 1.0) return null;
+    
+    let t = f * vecDot(edge2, q);
+    
+    if (t > EPSILON) {
+        return {t: t, u: u, v: v};
+    }
+    
+    return null;
+}
+
+// Vector operations
+function vecSubtract(a, b) {
+    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function vecCross(a, b) {
+    return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+    ];
+}
+
+function vecDot(a, b) {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function renderUnlitColoredTriangles(context) {
+    var inputTriangles = getInputTriangles();
+    var w = context.canvas.width;
+    var h = context.canvas.height;
+    var imagedata = context.createImageData(w, h);
+    
+    if (inputTriangles != String.null) { 
+        for (var y = 0; y < h; y++) {
+            for (var x = 0; x < w; x++) {
+                let hitResult = raycast(x, y, inputTriangles);
+                if (hitResult) {
+                    let color = new Color(
+                        hitResult.material.diffuse[0] * 255,
+                        hitResult.material.diffuse[1] * 255,
+                        hitResult.material.diffuse[2] * 255,
+                        255
+                    );
+                    drawPixel(imagedata, x, y, color);
+                }
+            }
+        }
+        context.putImageData(imagedata, 0, 0);
+    }
+}
+
+
+
+
 function main() {
 
     // Get the canvas and context
     var canvas = document.getElementById("viewport"); 
     var context = canvas.getContext("2d");
- 
+    renderUnlitColoredTriangles(context);
+	
     // Create the image
     //drawRandPixels(context);
       // shows how to draw pixels
@@ -476,7 +583,7 @@ function main() {
     //drawInputEllipsoidsUsingArcs(context);
       // shows how to read input file, but not how to draw pixels
     
-    drawRandPixelsInInputTriangles(context);
+    //drawRandPixelsInInputTriangles(context);
       // shows how to draw pixels and read input file
     
     //drawInputTrainglesUsingPaths(context);
@@ -487,4 +594,6 @@ function main() {
     
     //drawInputBoxesUsingPaths(context);
       // shows how to read input file, but not how to draw pixels
+	
+
 }
