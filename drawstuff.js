@@ -523,16 +523,19 @@ function drawInputBoxesUsingPaths(context) {
 } // end draw input boxes
 
 /* main -- here is where execution begins after window load */
-/* main -- here is where execution begins after window load */
 
-function raycast(x, y, triangles, canvasWidth, canvasHeight) {
-    const eyeZ = -0.5;
-    const windowZ = 0;
+//ray casting for a single pixel
+ function raycast(x, y, triangles, canvasWidth, canvasHeight) {
+    // position of eye
+    const eyeZ = -0.5; 
+    // position of window 
+    const windowZ = 0;  
+    
     let ray = {
-        origin: [0.5, 0.5, eyeZ],
+        origin: [0.5, 0.5, eyeZ], // eye is at the center
         direction: [
-            (x / canvasWidth) - 0.5,
-            -((y / canvasHeight) - 0.5),
+            (x / canvasWidth) - 0.5,     // normalize x coordinate to -0.5, 0.5
+            -((y / canvasHeight) - 0.5), 
             windowZ - eyeZ
         ]
     };
@@ -540,6 +543,7 @@ function raycast(x, y, triangles, canvasWidth, canvasHeight) {
     let closestT = Infinity;
     let hitTriangle = null;
     
+    // check intersection with all triangles
     for (let file of triangles) {
         for (let t = 0; t < file.triangles.length; t++) {
             let triangle = {
@@ -550,7 +554,7 @@ function raycast(x, y, triangles, canvasWidth, canvasHeight) {
             
             let intersectionResult = rayTriangleIntersection(ray, triangle);
             if (intersectionResult && intersectionResult.t > 0 && intersectionResult.t < closestT) {
-                // Check if intersection is in front of the window
+                // check if intersection is in front of the window
                 let intersectionZ = eyeZ + intersectionResult.t * ray.direction[2];
                 if (intersectionZ >= windowZ) {
                     closestT = intersectionResult.t;
@@ -563,8 +567,9 @@ function raycast(x, y, triangles, canvasWidth, canvasHeight) {
     return hitTriangle;
 }
 
+//check if a ray intersects with a triangle
 function rayTriangleIntersection(ray, triangle) {
-    const EPSILON = 0.0000001;
+    const EPSILON = 0.0000001; // to handle edge cases and inconsistencies
     let edge1 = vecSubtract(triangle.v1, triangle.v0);
     let edge2 = vecSubtract(triangle.v2, triangle.v0);
     let h = vecCross(ray.direction, edge2);
@@ -576,6 +581,7 @@ function rayTriangleIntersection(ray, triangle) {
     let s = vecSubtract(ray.origin, triangle.v0);
     let u = f * vecDot(s, h);
     
+    // check if intersection point is outside the triangle
     if (u < 0.0 || u > 1.0) return null;
     
     let q = vecCross(s, edge1);
@@ -592,11 +598,13 @@ function rayTriangleIntersection(ray, triangle) {
     return null;
 }
 
-// Vector operations
+
+//subtracts vectors
 function vecSubtract(a, b) {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 }
 
+//cross product
 function vecCross(a, b) {
   return [
     a[1] * b[2] - a[2] * b[1],
@@ -605,21 +613,19 @@ function vecCross(a, b) {
   ];
 }
 
+//dot product
 function vecDot(a, b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
 
+//renders unlit colored triangles
 function renderUnlitColoredTriangles(context) {
-  console.log("Starting renderUnlitColoredTriangles");
   var inputTriangles = getInputTriangles();
-  console.log("Input triangles:", inputTriangles);
   var w = context.canvas.width;
   var h = context.canvas.height;
-  console.log("Canvas dimensions:", w, "x", h);
   var imagedata = context.createImageData(w, h);
 
   if (inputTriangles !== String.null) {
-    console.log("Processing triangles");
     for (var y = 0; y < h; y++) {
       for (var x = 0; x < w; x++) {
         let hitResult = raycast(x, y, inputTriangles, w, h);
@@ -632,34 +638,30 @@ function renderUnlitColoredTriangles(context) {
           );
           drawPixel(imagedata, x, y, color);
         } else {
-          // Set background color to black
           drawPixel(imagedata, x, y, new Color(0, 0, 0, 255));
         }
       }
     }
-    console.log("Finished processing triangles");
     context.putImageData(imagedata, 0, 0);
   } else {
-    console.log("No triangles found in input");
   }
 }
 
 function main() {
-  console.log("Starting main function");
+  //added a bunch of log statements to troubleshoot some issues i was having
+  console.log("starting main function");
   var canvas = document.getElementById("viewport");
   if (!canvas) {
-    console.error("Canvas element not found");
+    console.error("canvas not found");
     return;
   }
   var context = canvas.getContext("2d");
   if (!context) {
-    console.error("Unable to get 2D context");
     return;
   }
-  console.log("Canvas and context successfully obtained");
+  console.log("success");
   renderUnlitColoredTriangles(context);
-  console.log("Finished main function");
+  console.log("finished main");
 }
 
-// Make sure this line is at the end of your drawstuff.js file
 window.onload = main;
