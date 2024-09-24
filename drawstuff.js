@@ -524,84 +524,172 @@ function drawInputBoxesUsingPaths(context) {
 
 /* main -- here is where execution begins after window load */
 
-//ray casting for a single pixel
- function raycast(x, y, triangles, canvasWidth, canvasHeight) {
-    // position of eye
-    const eyeZ = -0.5; 
-    // position of window 
-    const windowZ = 0;  
-    
-    let ray = {
-        origin: [0.5, 0.5, eyeZ], // eye is at the center
-        direction: [
-            (x / canvasWidth) - 0.5,     // normalize x coordinate to -0.5, 0.5
-            -((y / canvasHeight) - 0.5), 
-            windowZ - eyeZ
-        ]
-    };
-    
-    let closestT = Infinity;
-    let hitTriangle = null;
-    
-    // check intersection with all triangles
-    for (let file of triangles) {
-        for (let t = 0; t < file.triangles.length; t++) {
-            let triangle = {
-                v0: file.vertices[file.triangles[t][0]],
-                v1: file.vertices[file.triangles[t][1]],
-                v2: file.vertices[file.triangles[t][2]]
-            };
-            
-            let intersectionResult = rayTriangleIntersection(ray, triangle);
-            if (intersectionResult && intersectionResult.t > 0 && intersectionResult.t < closestT) {
-                // check if intersection is in front of the window
-                let intersectionZ = eyeZ + intersectionResult.t * ray.direction[2];
-                if (intersectionZ >= windowZ) {
-                    closestT = intersectionResult.t;
-                    hitTriangle = {triangle: triangle, material: file.material};
-                }
-            }
-        }
-    }
-    
-    return hitTriangle;
-}
+// ray casting for a single pixel
+function raycast(
+  x,
+  y,
+  triangles,
+  canvasWidth,
+  canvasHeight,
+  isChristmasScene = false
+) {
+  const eye = [0.5, 0.5, -0.5];
+  const windowZ = 0;
 
-//check if a ray intersects with a triangle
-function rayTriangleIntersection(ray, triangle) {
-    const EPSILON = 0.0000001; // to handle edge cases and inconsistencies
-    let edge1 = vecSubtract(triangle.v1, triangle.v0);
-    let edge2 = vecSubtract(triangle.v2, triangle.v0);
-    let h = vecCross(ray.direction, edge2);
-    let a = vecDot(edge1, h);
-    
-    if (a > -EPSILON && a < EPSILON) return null;
-    
-    let f = 1.0 / a;
-    let s = vecSubtract(ray.origin, triangle.v0);
-    let u = f * vecDot(s, h);
-    
-    // check if intersection point is outside the triangle
-    if (u < 0.0 || u > 1.0) return null;
-    
-    let q = vecCross(s, edge1);
-    let v = f * vecDot(ray.direction, q);
-    
-    if (v < 0.0 || u + v > 1.0) return null;
-    
-    let t = f * vecDot(edge2, q);
-    
-    if (t > EPSILON) {
-        return {t: t, u: u, v: v};
+  let rayDir = [
+    (x + 0.5) / canvasWidth - 0.5,
+    -((y + 0.5) / canvasHeight - 0.5),
+    windowZ - eye[2],
+  ];
+  rayDir = vecNormalize(rayDir);
+
+  let ray = { origin: eye, direction: rayDir };
+
+  let closestT = Infinity;
+  let hitInfo = null;
+
+  for (let file of triangles) {
+    let material = file.material;
+    for (let t = 0; t < file.triangles.length; t++) {
+      let triangle = {
+        v0: file.vertices[file.triangles[t][0]],
+        v1: file.vertices[file.triangles[t][1]],
+        v2: file.vertices[file.triangles[t][2]],
+      };
+
+      let intersectionResult = rayTriangleIntersection(ray, triangle, windowZ);
+      if (
+        intersectionResult &&
+        intersectionResult.t > 0 &&
+        intersectionResult.t < closestT
+      ) {
+        closestT = intersectionResult.t;
+        hitInfo = {
+          triangle: triangle,
+          material: material,
+          P: intersectionResult.P,
+          N: intersectionResult.N,
+        };
+      }
     }
-    
+  }
+
+  if (hitInfo) {
+    let color = computeBlinnPhong(
+      hitInfo.P,
+      hitInfo.N,
+      eye,
+      hitInfo.material,
+      isChristmasScene
+    );
+    return color;
+  } else {
     return null;
+  }
 }
 
+// check if a ray intersects with a triangle using plane equation
+function rayTriangleIntersection(ray, triangle, windowZ) {
+  const EPSILON = 0.0000001;
+
+  let A = triangle.v0;
+  let B = triangle.v1;
+  let C = triangle.v2;
+
+  let BA = vecSubtract(B, A);
+  let CA = vecSubtract(C, A);
+  let N = vecCross(BA, CA);
+  N = vecNormalize(N);
+
+  let d = vecDot(N, A);
+
+  let denom = vecDot(N, ray.direction);
+
+  if (Math.abs(denom) < EPSILON) return null;
+
+  let t = (d - vecDot(N, ray.origin)) / denom;
+
+  if (t < 0) return null;
+
+  let P = vecAdd(ray.origin, vecScale(ray.direction, t));
+
+  if (P[2] < windowZ - EPSILON) {
+    return null;
+  }
+
+  let edge0 = vecSubtract(B, A);
+  let vp0 = vecSubtract(P, A);
+  let C0 = vecCross(edge0, vp0);
+
+  let edge1 = vecSubtract(C, B);
+  let vp1 = vecSubtract(P, B);
+  let C1 = vecCross(edge1, vp1);
+
+  let edge2 = vecSubtract(A, C);
+  let vp2 = vecSubtract(P, C);
+  let C2 = vecCross(edge2, vp2);
+
+  if (
+    vecDot(N, C0) >= -EPSILON &&
+    vecDot(N, C1) >= -EPSILON &&
+    vecDot(N, C2) >= -EPSILON
+  ) {
+    return { t: t, P: P, N: N };
+  } else {
+    return null;
+  }
+}
+
+// computes the color of a point using Blinn-Phong
+function computeBlinnPhong(P, N, eye, material, isChristmasScene = false) {
+  const lightPos = [-3, 1, -0.5];
+  let La, Ld, Ls;
+
+  if (isChristmasScene) {
+    La = [0.2, 0.2, 0.3]; // night sky
+    Ld = [0.8, 0.8, 1.0]; // moonlight color
+    Ls = [1, 1, 1];
+  } else {
+    La = [1, 1, 1];
+    Ld = [1, 1, 1];
+    Ls = [1, 1, 1];
+  }
+
+  let V = vecNormalize(vecSubtract(eye, P));
+  if (vecDot(N, V) < 0) {
+    N = vecScale(N, -1);
+  }
+
+  let L = vecNormalize(vecSubtract(lightPos, P));
+  let H = vecNormalize(vecAdd(L, V));
+
+  let color = [0, 0, 0];
+
+  for (let c = 0; c < 3; c++) {
+    color[c] = material.ambient[c] * La[c];
+    color[c] += material.diffuse[c] * Ld[c] * Math.max(vecDot(N, L), 0);
+    color[c] +=
+      material.specular[c] *
+      Ls[c] *
+      Math.pow(Math.max(vecDot(N, H), 0), material.n);
+  }
+
+  color = color.map((c) => Math.min(Math.max(c, 0), 1) * 255);
+
+  return new Color(color[0], color[1], color[2], 255);
+}
 
 //subtracts vectors
 function vecSubtract(a, b) {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function vecAdd(a, b) {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+}
+
+function vecScale(v, s) {
+  return [v[0] * s, v[1] * s, v[2] * s];
 }
 
 //cross product
@@ -616,6 +704,24 @@ function vecCross(a, b) {
 //dot product
 function vecDot(a, b) {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function vecNormalize(v) {
+  let length = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+  if (length > 0) {
+    return [v[0] / length, v[1] / length, v[2] / length];
+  }
+  return [0, 0, 0];
+}
+
+// Multiply two vectors component-wise
+function vecMultiply(a, b) {
+  return [a[0] * b[0], a[1] * b[1], a[2] * b[2]];
+}
+
+// Multiply vector by scalar
+function vecMultiplyScalar(v, s) {
+  return [v[0] * s, v[1] * s, v[2] * s];
 }
 
 //renders unlit colored triangles
@@ -644,11 +750,159 @@ function renderUnlitColoredTriangles(context) {
     }
     context.putImageData(imagedata, 0, 0);
   } else {
+    console.log("No triangles found.");
   }
 }
 
+// renders the first view upon page load, that is all the original triangles
+function renderOriginalScene(context) {
+  var inputTriangles = getInputTriangles();
+  var w = context.canvas.width;
+  var h = context.canvas.height;
+  var imagedata = context.createImageData(w, h);
+
+  if (inputTriangles !== String.null) {
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        let color = raycast(x, y, inputTriangles, w, h, false);
+        if (color) {
+          drawPixel(imagedata, x, y, color);
+        } else {
+          drawPixel(imagedata, x, y, new Color(0, 0, 0, 255));
+        }
+      }
+    }
+    context.putImageData(imagedata, 0, 0);
+  } else {
+    console.log("No triangles found.");
+  }
+}
+
+// creates scene that is visible upon spacebar press
+function createChristmasTreeScene() {
+  let scene = [];
+
+  // create trees
+  for (let i = 0; i < 7; i++) {
+    for (let j = 0; j < 4; j++) {
+      let x = 0.05 + i * 0.15 + Math.random() * 0.05;
+      let y = 0.1 + j * 0.2 + Math.random() * 0.1;
+      let z = 0.5;
+      let size = 0.05 + Math.random() * 0.08;
+
+      scene.push({
+        vertices: [
+          [x, y, z],
+          [x + size, y - size * 1.5, z],
+          [x - size, y - size * 1.5, z],
+          [x, y + size * 1.5, z - size],
+        ],
+        triangles: [
+          [0, 1, 2],
+          [0, 1, 3],
+          [1, 2, 3],
+          [2, 0, 3],
+        ],
+        material: {
+          ambient: [0.05, 0.15, 0.05],
+          diffuse: [0.1, 0.4 + Math.random() * 0.2, 0.1],
+          specular: [0.2, 0.2, 0.2],
+          n: 10,
+        },
+      });
+    }
+  }
+
+  // moon
+  let moonCenter = [0.8, 0.8, 0.8];
+  let moonRadius = 0.15;
+  let moonSegments = 32;
+
+  for (let i = 0; i < moonSegments; i++) {
+    let angle1 = (i / moonSegments) * Math.PI * 2;
+    let angle2 = ((i + 1) / moonSegments) * Math.PI * 2;
+
+    let p1 = [
+      moonCenter[0] + moonRadius * Math.cos(angle1),
+      moonCenter[1] + moonRadius * Math.sin(angle1),
+      moonCenter[2],
+    ];
+    let p2 = [
+      moonCenter[0] + moonRadius * Math.cos(angle2),
+      moonCenter[1] + moonRadius * Math.sin(angle2),
+      moonCenter[2],
+    ];
+
+    scene.push({
+      vertices: [moonCenter, p1, p2],
+      triangles: [[0, 1, 2]],
+      material: {
+        ambient: [0.2, 0.2, 0.2],
+        diffuse: [0.9, 0.9, 0.8],
+        specular: [0.5, 0.5, 0.5],
+        n: 20,
+      },
+    });
+  }
+
+  return scene;
+}
+
+let useInterestingScene = false;
+
+// event listener for switching scenes
+document.addEventListener("keydown", (event) => {
+  if (event.code === "Space") {
+    useInterestingScene = !useInterestingScene;
+    main();
+  }
+});
+
+// renders lit triangles, unused
+function renderLitTriangles(context, customScene = null) {
+  var inputTriangles = customScene || getInputTriangles();
+  var w = context.canvas.width;
+  var h = context.canvas.height;
+  var imagedata = context.createImageData(w, h);
+
+  if (inputTriangles !== String.null) {
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        let color = raycast(x, y, inputTriangles, w, h);
+        if (color) {
+          drawPixel(imagedata, x, y, color);
+        } else {
+          drawPixel(imagedata, x, y, new Color(0, 0, 0, 255));
+        }
+      }
+    }
+    context.putImageData(imagedata, 0, 0);
+  } else {
+    console.log("No triangles found.");
+  }
+}
+
+// rendering scene thats visible after spacebar press
+function renderChristmasScene(context) {
+  let scene = createChristmasTreeScene();
+  var w = context.canvas.width;
+  var h = context.canvas.height;
+  var imagedata = context.createImageData(w, h);
+
+  for (var y = 0; y < h; y++) {
+    for (var x = 0; x < w; x++) {
+      let color = raycast(x, y, scene, w, h, true);
+      if (color) {
+        drawPixel(imagedata, x, y, color);
+      } else {
+        drawPixel(imagedata, x, y, new Color(0, 0, 0, 255));
+      }
+    }
+  }
+  context.putImageData(imagedata, 0, 0);
+}
+// main function to start the rendering, has lots of debug statements that helped while debugging
 function main() {
-  //added a bunch of log statements to troubleshoot some issues i was having
   console.log("starting main function");
   var canvas = document.getElementById("viewport");
   if (!canvas) {
@@ -657,10 +911,17 @@ function main() {
   }
   var context = canvas.getContext("2d");
   if (!context) {
+    console.error("context not found");
     return;
   }
   console.log("success");
-  renderUnlitColoredTriangles(context);
+
+  if (useInterestingScene) {
+    renderChristmasScene(context);
+  } else {
+    renderOriginalScene(context);
+  }
+
   console.log("finished main");
 }
 
