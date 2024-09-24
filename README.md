@@ -1,13 +1,24 @@
-# README
+# Program 1 - Arul Sharma
 
-**Ray Casting Function**:
-   - Implemented a ray casting function that shoots rays from an eye position through each pixel of the canvas.
-   - Defined the eye position at (0.5, 0.5, -0.5) and the window at z=0.
+## Implementation
 
-**Intersection Function**:
-   - Created a function to check if a ray intersects with a triangle using the Möller–Trumbore intersection algorithm.
-   - Implemented vector operations helper functions to support the intersection calculations.
+   - Shoots rays from an eye position (0.5, 0.5, -0.5) through each pixel of the canvas
+   - Uses a window plane at z=0 for ray-scene intersections
+   - Calculates the intersection of the ray with the triangle's plane
+   - Uses an edge-testing method to determine if the intersection point lies within the triangle
+   - Implements the Blinn-Phong reflection model for realistic lighting
 
-**Color Rendering**:
-   - Set up the rendering to use the diffuse color of the intersected triangle.
-   - Implemented a black background for areas where no triangles are intersected.
+
+   - Original Scene: Renders colored triangles as was expected
+   - Christmas Scene: Creates a custom scene with multiple trees and a moon in the night sky
+   - Allows toggling between the original and Christmas scenes using the spacebar.
+
+
+## Functions Overview
+
+- `raycast()`: Core function for ray casting implementation
+- `rayTriangleIntersection()`: Checks for intersection between a ray and a triangle
+- `computeBlinnPhong()`: Calculates lighting using the Blinn-Phong model
+- `createChristmasTreeScene()`: Generates the Christmas-themed scene
+- `renderOriginalScene()`: Renders the original triangle scene
+- `renderChristmasScene()`: Renders the Christmas tree scene
